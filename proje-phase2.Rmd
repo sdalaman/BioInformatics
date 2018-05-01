@@ -1,0 +1,622 @@
+---
+title: "A Statistical Analysis of Well-Being Indicators for Provinces in Turkey"
+author: "Ayþe Rumeysa Muþ and Þaban Dalaman"
+date: "ISE 534 - Data Mining"
+output: pdf_document
+---
+
+# Introduction and data set description
+
+  In this phase of our project, we are going to implement various methods we have learned 
+in the classroom. 
+
+# Data set description
+
+  Our dataset is taken from TUIK statistics conducted every year. It is 2015 dataset of the 
+different statistics related to well-being Indicators of people living 
+all provinces in Turkey.  
+
+  The data set includes 47 observations devided as 40 features and 7 responses for 
+81 provinces in Turkey.   
+
+# Model Implementation Details
+
+  Since our target is predicting responses from features, we did not implement classification 
+methods.  
+
+  All the regression tests are run on "Level.of.Happiness" response.  
+
+The list of implemented methods :
+
+* **Classification**
+    + kNN Classification
+    + kNN Classification for each response with cost plots
+    + kNN Classification with CV
+* **Subset Selection**
+    + Best Subset Selection
+    + Forward Stepwise Selection
+    + Model Selection using validation set
+* **Regression**
+    + Ridge Regression
+    + Lasso Regression
+    + Selecting Lambda using train/validation sets for Lasso
+* **Trees**
+    + Decision Trees
+    + Decision Tree using train and test sets
+    + Decision Tree using CV set and test set
+    + Regression Tree
+    + Pruning
+    + Random Forests 
+    + Boosting
+* **Dimensional Analysis**
+    + PCA dimensional Analysis
+* **Clustering**
+    + Seclecting best k for k-means Clustering
+    + k-Means Clustering
+
+# Classification
+
+## kNN Classification 
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}  
+##############################################################
+##### kNN Classification
+require(ISLR)
+require(tree)
+require(cluster)
+library(rgl)
+library(fpc)
+library(class)
+library(FNN)
+library(glmnet)
+province.data <- read.csv("work-file.csv", header=T)
+attach(province.data)
+rownames(province.data) = province.data[,2]
+scaledData <- scale(province.data[c(3:ncol(province.data))])
+plotCluster <- function(scaledData,selColumns,csize=1,plotheading="",
+                        clusheading="") {
+  selData <- scaledData[,selColumns]
+  wss <- 0
+  for(i in 1:10) wss[i] <- sum(kmeans(selData,centers=i)$withinss)
+  plot(1:10,wss,type="b",xlab="Number of Clusters",ylab="Cost",main=plotheading)
+  fit <- kmeans(selData,centers=csize)
+  plotData <- data.frame(selData,K=fit$cluster)
+  clusplot(plotData,fit$cluster,color=TRUE,shade=TRUE,labels=2,lines=0,
+           main=clusheading)
+  pcdf <- princomp(selData,cor=T,score=T)
+  summary(pcdf)#Compute the validity of each component/dimension
+#  plot3d(pcdf$scores, col=plotData$K)#Create a 3D plot
+}
+
+columns <- c("Number.of.rooms.per.person"  ,"Toilet.presence.percentage.in.dwellings"  ,
+  "Percentage.of.house.holds.having.problems.with.quality.of.dwellings")
+plotCluster(scaledData,columns,5,"Housing Cost Plot","Housing Clusters")
+
+columns <-  c( "Employment.rate"  ,                                                                                               
+               "Unemployment.rate" ,                                                                                              
+               "Average.daily.earnings",                                                                                          
+               "Job.satisfaction.rate" )
+plotCluster(scaledData,columns,5,"Work Life Cost Plot","Work Life Clusters")
+
+columns <- c("Savings.deposit.per.capita",                                                                                      
+             "Percentage.of.house.holds.in.middle.or.higher.income.groups",                                                     
+             "Percentage.of.house.holds.declaring.to.fail.on.meeting.basic.needs" )
+plotCluster(scaledData,columns,5,"Income and Wealth Cost Plot","Income and Wealth Clusters")
+
+columns <- c("Infant.mortality.rate",                                                                                          
+             "Life.expectancy.at.birth",                                                                                       
+             "Number.of.applications.per.doctor" ,                                                                              
+             "Satisfication.rate.with.health.status" ,                                                                          
+             "Satisfication.rate.with.public.health.services" )   
+plotCluster(scaledData,columns,5,"Health Cost Plot","Health Clusters")
+
+columns <- c("Net.schooling.ratio.of.pre.primary.education.between.the.ages.of.3and5",                                          
+             "Average.point.of.placement.basic.scores.of.the.system.for.Transition.to.Secondary.Education.from.Basic.Education",
+             "Average.points.of.the.Transition.to.Higher.Education.Examination" ,                                               
+             "Percentage.of.higher.education.graduates",                                                                        
+             "Satisfaction.rate.with.public.education.services") 
+plotCluster(scaledData,columns,5,"Education Cost Plot","Education Clusters")
+
+columns <- c("Average.of.PM10.values.of.the.stations..airpollution.",                                                           
+             "Forest.area.per.km2",                                                                                             
+             "Percentage.of.population.receiving.waste.services" ,                                                              
+             "Percentage.of.households.having.noise.problems.from.the.streets",                                                 
+             "Satisfaction.rate.with.municipal.cleaning.services")
+plotCluster(scaledData,columns,5,"Environment Cost Plot","Environment Clusters")
+
+columns <- c("Murder.rate..per.million.people." ,                                                                               
+             "Number.of.traffic.accidents.involving.death.or.injury..per.thousand.people.",                                     
+             "Percentage.of.people.feeling.safe.when.walking.alone.at.night" ,                                                  
+             "Satisfication.rate.with.public.safety.services")
+plotCluster(scaledData,columns,5,"Safety Cost Plot","Safety Clusters")
+
+columns <- c("Voter.turnout.at.local.administrations",                                                                         
+             "Rate.of.membership.to.political.parties" ,                                                                        
+             "Percentage.of.persons.interested.in.union.association.activities")  
+plotCluster(scaledData,columns,5,"Civic engagement Cost Plot","Civic engagement Clusters")
+
+columns <- c("Number.of.internet.subscriptions..per.hundred.persons.",                                                         
+             "Access.rate.of.population.to.sewerage.and.pipesystem" ,                                                           
+             "Access.rate.to.airport",                                                                                          
+             "Satisfaction.rate.with.municipal.public.transport.services") 
+plotCluster(scaledData,columns,5,"Infrastructure services Cost Plot","Infrastructure services Clusters")
+
+columns <- c("Number.of.cinema.and.theatre.audience..per.hundred.persons.",                                                     
+             "Shopping.mall.area.per.thousand.people" ,                                                                         
+             "Satisfication.rate.with.social.relations",                                                                       
+             "Satisfication.rate.with.social.life" )
+plotCluster(scaledData,columns,5,"Social Life Cost Plot","Social Life Clusters")
+
+columns <- c("Level.of.happiness" ,                                                                                             
+             "Hopeful",                                                                                                        
+             "Life.Satisfaction.Index")  
+plotCluster(scaledData,columns,5,"Life Statisfaction Cost Plot","Life Statisfaction Clusters")
+
+columns <- c("Life.Expectancy.Total" ,                                                                                          
+             "Life.Expectancy.Male",                                                                                           
+             "Life.Expectancy.Female" ) 
+plotCluster(scaledData,columns,5,"Life Expectancy Cost Plot","Life Expectancy Clusters")
+```
+
+## kNN Classification With CV
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+##############################################################
+##### kNN Regression with CV
+library(caret)
+set.seed(101)
+province.data <- read.csv("work-file.csv", header=T)
+attach(province.data)
+rownames(province.data) = province.data[,2]
+scaledData <- province.data[c(3:ncol(province.data))]
+columns <- c("Level.of.happiness" ,                                                                                             
+             "Hopeful",                                                                                                        
+             "Life.Satisfaction.Index",
+             "Life.Expectancy.Total",
+             "Life.Expectancy.Male",
+             "Life.Expectancy.Female")
+
+# Selecting best k with cv for 4 different responses
+for (resCol in 1:4) {
+  responseColumn <- columns[resCol]
+  # Number of instances
+  nrows <- nrow(scaledData)
+  nfolds=10
+  klist <- seq(50) # all values of k
+  # Get Data
+  train = scaledData
+  # Prepare the folds
+  train$id <- sample(1:nfolds, nrow(train), replace = TRUE)
+  folds <- 1:nfolds
+  # Cross-validation
+  rmse.CV <- 0
+  for (j in klist) {
+    rmse.CVK <- 0
+    for (i in seq(nfolds)) {
+      x.train <- subset(train, id %in% folds[-i])
+      x.test <- subset(train, id %in% c(i))
+      y.train  <- x.train[,responseColumn]   # train response
+      y.test  <- x.test[,responseColumn]   # train response
+      x.train <- x.train[ , !(names(x.train) %in% columns)]
+      x.test <- x.test[ , !(names(x.test) %in% columns)]
+      knnfit <- knnreg(x.train,y.train,k=j)
+      predictions <- predict(knnfit, x.test)
+      rmse.CVK[i] <- mean((y.test - predictions)^2)
+    }
+    rmse.CV[j] <- mean(rmse.CVK)
+  }
+
+  subset = sample(1:nrow(scaledData), nrow(scaledData)*0.8)
+  train <- scaledData[subset,]
+  test <- scaledData[-subset,]
+  x.train <- train[1:40]
+  x.test <- test[1:40]
+  y.train <- train[,responseColumn]
+  y.test <- test[,responseColumn]
+  rmse.Train <- 0
+  rmse.Test <- 0
+  for (j in klist) {
+    knnfit <- knnreg(x.train,y.train,k=j)
+    predictions <- predict(knnfit, x.train)
+    rmse.Train[j] <- mean((y.train - predictions)^2)
+    predictions <- predict(knnfit, x.test)
+    rmse.Test[j] <- mean((y.test - predictions)^2)
+  }
+
+  ymax = max(max(rmse.CV),max(rmse.Test),max(rmse.Train))
+
+  plot(rmse.Train , ylim=c(0,ymax) , type='l' , xlab='k' , ylab='MSE', 
+     col=1 , lwd=2,main = responseColumn)
+  lines(rmse.Test , col=2 , lwd=2)
+  lines(rmse.CV, col=3 , lwd=2)
+  legend("bottomright",legend=c('Train','Test','CV'),text.col=seq(3) , lty=1 ,    col=seq(3))
+}
+```
+
+# Feature Selection
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+#Data Preparation
+
+library(leaps)
+province.data <- read.csv("work-file.csv", header=T)
+province.data <- province.data[,2:ncol(province.data)]
+attach(province.data)
+rownames(province.data) <- province.data[,1]
+x.train <- province.data[c(2:ncol(province.data))]
+y.train <- x.train[,41:46]
+x.train <- x.train[,1:40]
+```
+
+## Best Subset Selection
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+#Best Subset regression
+#------------------------
+
+#regfit.full=regsubsets(y.train[,1]~.,data=x.train)
+#summary(regfit.full)
+#regfit.full=regsubsets(y.train[,1]~.,data=x.train, nvmax=ncol(x.train))
+#reg.summary=summary(regfit.full)
+#names(reg.summary)
+#plot(reg.summary$cp,xlab="Number of Variables",ylab="Cp")
+#which.min(reg.summary$cp)
+#points(10,reg.summary$cp[10],pch=20,col="red")
+#plot(regfit.full,scale="Cp")
+#coef(regfit.full,10)
+
+```
+
+## Forward Stepwise Selection
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+
+#Forward Stepwise Selection
+#--------------------------
+regfit.fwd=regsubsets(y.train[,1]~.,data=x.train,nvmax=ncol(x.train),method="forward")
+#summary(regfit.fwd)
+plot(regfit.fwd,scale="Cp")
+coef(regfit.fwd,10)
+```
+
+## Model Selection Using Validation Set
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+
+#Model Selection Using a Validation Set
+#---------------------------------------
+dim(x.train)
+set.seed(1)
+trainId=sample(seq(81),60,replace=FALSE)
+trainId
+regfit.fwd=regsubsets(y.train[trainId,1]~.,data=x.train[trainId,],
+                      nvmax=ncol(x.train),method="forward")
+val.errors=rep(NA,ncol(x.train))
+x.test=model.matrix(y.train[-trainId,1]~.,data=x.train[-trainId,])# notice the -index!
+for(i in 1:ncol(x.train)){
+  coefi=coef(regfit.fwd,id=i)
+  pred=x.test[,names(coefi)]%*%coefi
+  val.errors[i]=mean((y.train[-trainId]-pred)^2)
+}
+plot(sqrt(val.errors),ylab="Root MSE",ylim=c(15,45),pch=19,type="b")
+points(sqrt(regfit.fwd$rss[-1]/180),col="blue",pch=19,type="b")
+points(sqrt(regfit.fwd$rss[-1]),col="blue",pch=19,type="b")
+legend("topright",legend=c("Training","Validation"),col=c("blue","black"),pch=19)
+
+#as the model gets bigger
+#the training error goes down monotonically 
+# but not so for the validation error.
+
+#a predict method for regsubsets
+
+predict.regsubsets=function(object,newdata,id,...){
+  form=as.formula(object$call[[2]])
+  mat=model.matrix(form,newdata)
+  coefi=coef(object,id=id)
+  mat[,names(coefi)]%*%coefi
+}
+```
+
+# Regression
+
+## Ridge Regression
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+#Ridge Regression and the Lasso
+#-------------------------------
+
+xf=model.matrix(y.train[,1]~.-1,data=x.train) 
+yf=y.train[,1]
+# First ridge-regression model.  
+fit.ridge=glmnet(xf,yf,alpha=0)
+plot(fit.ridge,xvar="lambda",label=TRUE)
+cv.ridge=cv.glmnet(xf,yf,alpha=0)
+plot(cv.ridge)
+```
+
+## Lasso Regression
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# Now fit a lasso model
+
+fit.lasso=glmnet(xf,yf)
+plot(fit.lasso,xvar="lambda",label=TRUE)
+cv.lasso=cv.glmnet(xf,yf)
+plot(cv.lasso)
+coef(cv.lasso)
+```
+
+## Selecting Lambda Using Train/Validation Sets For Lasso
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# using train/validation division to select the `lambda` for the lasso.
+dim(x.train)
+set.seed(1)
+trainId=sample(seq(81),60,replace=FALSE)
+lasso.tr=glmnet(xf[trainId,],yf[trainId])
+#lasso.tr
+pred=predict(lasso.tr,xf[-trainId,])
+#dim(pred)
+rmse= sqrt(apply((yf[-trainId]-pred)^2,2,mean))
+plot(log(lasso.tr$lambda),rmse,type="b",xlab="Log(lambda)")
+lam.best=lasso.tr$lambda[order(rmse)[1]]
+lam.best
+coef(lasso.tr,s=lam.best)
+```
+
+#Trees
+
+## Decision Trees
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+# Decision Trees
+
+#require(ISLR)
+require(tree)
+colnm = colnames(y.train)
+train = x.train
+train[,colnm[1]] = y.train[,colnm[1]]
+tree.province=tree(as.formula(paste(colnm[1],"~.")),data=train)
+summary(tree.province)
+plot(tree.province)
+text(tree.province,pretty=0)
+```
+
+## Decision Tree Using Train And Test Sets
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+
+#Decision Tree Using a Validation Set and Test Set
+
+set.seed(1011)
+trainId=sample(seq(81),60,replace=FALSE)
+xt=train[trainId,] 
+tree.province=tree(as.formula(paste(colnm[1],"~.")),data=xt)
+plot(tree.province);
+text(tree.province,pretty=0)
+tree.pred=predict(tree.province,xt,type="vector")
+train.err=with(xt,mean((xt[,colnm[1]]-tree.pred)^2))
+xv=train[-trainId,] 
+tree.pred=predict(tree.province,xv,type="vector")
+test.err=with(xv,mean((xv[,colnm[1]]-tree.pred)^2))
+cat("Train Error : " ,train.err)
+cat("Test Error : " ,test.err)
+```
+
+## Decision Tree Using CV Set And Test Set
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+#Decision Tree Using a CV Set and Test Set
+
+cv.province=cv.tree(tree.province,FUN=prune.tree,K=10)
+#cv.province
+plot(cv.province)
+prune.province=prune.tree(tree.province,best=4)
+plot(prune.province);
+text(prune.province,pretty=0)
+tree.pred=predict(prune.province,xv,type="vector")
+test.err=with(xv,mean((xv[,colnm[1]]-tree.pred)^2))
+cat("CV Test Error : " ,test.err)
+```
+
+## Regression Tree
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# Regression Tree Example
+library(rpart)
+# grow tree 
+fittree <- rpart(as.formula(paste(colnm[1],"~.")), 
+                 method="anova", data=train)
+printcp(fittree) # display the results 
+plotcp(fittree) # visualize cross-validation results 
+#summary(fittree) # detailed summary of splits
+# create additional plots 
+#par(mfrow=c(1,2)) # two plots on one page 
+rsq.rpart(fittree) # visualize cross-validation results  	
+# plot tree 
+plot(fittree, uniform=TRUE, 
+     main="Regression Tree")
+text(fittree, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+## Pruning
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# prune the tree 
+pfittree<- prune(fittree, cp=0.055163) # from cptable   
+# plot the pruned tree 
+plot(pfittree, uniform=TRUE, 
+     main="Pruned Regression Tree")
+text(pfittree, use.n=TRUE, all=TRUE, cex=.8)
+```
+
+## Random Forests
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+# Random Forests
+require(randomForest)
+rf.boston=randomForest(as.formula(paste(colnm[1],"~.")),data=xt)
+rf.boston
+
+oob.err=double(40)
+test.err=double(40)
+for(mtry in 1:40){
+  rf.boston=randomForest(as.formula(paste(colnm[1],"~.")),data=xt,mtry=mtry,ntree=400)
+  oob.err[mtry]=rf.boston$mse[400]
+  pred=predict(rf.boston,xv)
+  test.err[mtry]=with(xv,mean((xv[,colnm[1]]-pred)^2))
+  #cat(mtry," ")
+}
+matplot(1:mtry,cbind(test.err,oob.err),pch=19,col=c("red","blue"),type="b",ylab="Mean Squared Error")
+legend("topright",legend=c("OOB","Test"),pch=19,col=c("red","blue"))
+
+cat("Importance List of Features")
+importance(rf.boston)
+#varImpPlot(rf.boston)
+#rf.boston$importance
+
+cat("Firts 8 Features In the Order Of Importance")
+importanceOrder=order(-rf.boston$importance)
+names=rownames(rf.boston$importance)[importanceOrder][1:8]
+names
+```
+
+## Boosting
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+
+#Boosting
+#--------
+
+require(gbm)
+set.seed(1011)
+trainId=sample(seq(81),60,replace=FALSE)
+xt=train[trainId,] 
+xv=train[-trainId,] 
+boost.province=gbm(as.formula(paste(colnm[1],"~.")),data=xt,distribution="gaussian",
+                   n.trees=10000,shrinkage=0.01,interaction.depth=4)
+summary(boost.province)
+
+
+#Lets try a prediction on the test set. 
+#the number of trees is a tuning parameter, 
+#and if there are too many it may overfit . 
+
+n.trees=seq(from=100,to=10000,by=100)
+predmat=predict(boost.province,newdata=xv,n.trees=n.trees)
+dim(predmat)
+berr=with(xv,apply( (predmat-xv[,colnm[1]])^2,2,mean))
+plot(n.trees,berr,pch=19,ylab="Mean Squared Error", 
+     xlab="# Trees",main="Boosting Test Error")
+abline(h=min(berr),col="red")
+```
+
+# Dimensional Analysis
+
+## PCA Dimensional Analysis 
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+#PCA Dimensional analysis
+
+pca.out=prcomp(x.train, scale=TRUE)
+biplot(pca.out, scale=0)
+
+
+
+pca_out_df <- as.data.frame(pca.out$x)
+library(scales)
+ramp <- colorRamp(c("yellow", "blue"))
+colours_by_mean <- rgb( 
+  ramp( as.vector(rescale(rowMeans(pca_out_df),c(0,1)))), 
+  max = 255 )
+plot(PC1~PC2, data=pca_out_df,
+     main= "PCA Mean Dist",
+     cex = .1, lty = "solid", col=colours_by_mean)
+text(PC1~PC2, data=pca_out_df, 
+     labels=rownames(x.train),
+     cex=.8, col=colours_by_mean)
+lst <- pca.out$rotation
+importanceOrder=order(-lst[,"PC1"])
+names=rownames(lst)[importanceOrder][1:5]
+cat("List of First 5 features of PCA1")
+names
+names=rownames(lst)[order(-lst[,"PC2"])][1:5]
+cat("List of First 5 features of PCA1")
+names
+
+#pca.out$sdev
+pca.var = pca.out$sdev^2
+pve=pca.var/sum(pca.var)
+plot(pve , xlab=" Principal Component ", 
+     ylab=" Proportion of Variance ", ylim=c(0,1),type='b' )
+plot(cumsum (pve ), xlab=" Principal Component ", 
+     ylab ="       Cumulative Proportion of Variance ", 
+     ylim=c(0,1) ,       type='b')
+
+cat("List of First 4 PCA Rotation Components (5 Component Listed)")
+pca.out$rotation[1:5,1:4]
+```
+
+# Clustering
+
+## Seclecting Best k For k-Means Clustering
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# Looking at Total within-cluster sum of squares for different k
+# to select best k
+set.seed(10)
+maxk=15
+err=numeric(maxk)
+errchn=numeric(maxk)
+errchn2=numeric(maxk)
+last=0
+last2=0
+for (k in 1:maxk){
+  km.out=kmeans(x.train,k,nstart=150)
+  err[k]=km.out$tot.withinss
+  errchn[k]=km.out$tot.withinss - last
+  errchn2[k]=errchn[k] - last2
+  last=km.out$tot.withinss
+  last2=errchn[k]
+}
+#errchn[1] = errchn[2]
+#which.min(err)
+#which.min(errchn)
+#which.min(errchn2)
+matplot(1:maxk,cbind(err,errchn,errchn2),pch=19,col=c("red","blue","black"),type="b",ylab="Mean Squared Error")
+legend("topright",legend=c("Err","Errchn","Errchn2"),pch=19,col=c("red","blue","black"))
+```
+
+## k-Means Clustering
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# k-means Clustering
+library(mclust)
+mydata <- scale(x.train) # standardize variables
+fit <- Mclust(mydata)
+plot(fit$BIC) # plot results 
+summary(fit) # display the best model
+# K-Means Clustering with 6 clusters
+fit <- kmeans(mydata, 6)
+
+# Cluster Plot against 1st 2 principal components
+# vary parameters for most readable graph
+library(cluster) 
+clusplot(mydata, fit$cluster, color=TRUE, shade=TRUE, 
+         labels=2, lines=0,main="PCA1 VS PC2 Cluster Plot")
+
+```
+
+
